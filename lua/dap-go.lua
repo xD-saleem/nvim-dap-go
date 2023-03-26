@@ -3,14 +3,15 @@ local query = require("vim.treesitter.query")
 local M = {
   last_testname = "",
   last_testpath = "",
+  config = {
+    delve = {
+      initialize_timeout_sec = 20,
+      port = "${port}",
+      build_flags = "",
+    },
+  }
 }
 
-local default_config = {
-  delve = {
-    initialize_timeout_sec = 20,
-    port = "${port}",
-  },
-}
 
 local tests_query = [[
 (function_declaration
@@ -58,27 +59,28 @@ local function get_arguments()
   end
 end
 
-local function setup_delve_adapter(dap, config)
+local function setup_delve_adapter(dap)
   dap.adapters.go = {
     type = "server",
-    port = config.delve.port,
+    port = M.config.delve.port,
     executable = {
       command = "dlv",
-      args = { "dap", "-l", "127.0.0.1:" .. config.delve.port },
+      args = { "dap", "-l", "127.0.0.1:" .. M.config.delve.port },
     },
     options = {
-      initialize_timeout_sec = config.delve.initialize_timeout_sec,
+      initialize_timeout_sec = M.config.delve.initialize_timeout_sec,
     },
   }
 end
 
-local function setup_go_configuration(dap, configs)
+local function setup_go_configuration(dap)
   dap.configurations.go = {
     {
       type = "go",
       name = "Debug",
       request = "launch",
       program = "${file}",
+      buildFlags = M.config.delve.build_flags,
     },
     {
       type = "go",
@@ -86,12 +88,14 @@ local function setup_go_configuration(dap, configs)
       request = "launch",
       program = "${file}",
       args = get_arguments,
+      buildFlags = M.config.delve.build_flags,
     },
     {
       type = "go",
       name = "Debug Package",
       request = "launch",
       program = "${fileDirname}",
+      buildFlags = M.config.delve.build_flags,
     },
     {
       type = "go",
@@ -106,6 +110,7 @@ local function setup_go_configuration(dap, configs)
       request = "launch",
       mode = "test",
       program = "${file}",
+      buildFlags = M.config.delve.build_flags,
     },
     {
       type = "go",
@@ -113,14 +118,15 @@ local function setup_go_configuration(dap, configs)
       request = "launch",
       mode = "test",
       program = "./${relativeFileDirname}",
+      buildFlags = M.config.delve.build_flags,
     },
   }
 
-  if configs == nil or configs.dap_configurations == nil then
+  if M.config == nil or M.config.dap_configurations == nil then
     return
   end
 
-  for _, config in ipairs(configs.dap_configurations) do
+  for _, config in ipairs(M.config.dap_configurations) do
     if config.type == "go" then
       table.insert(dap.configurations.go, config)
     end
@@ -128,13 +134,13 @@ local function setup_go_configuration(dap, configs)
 end
 
 function M.setup(opts)
-  local config = vim.tbl_deep_extend("force", default_config, opts or {})
+  M.config = vim.tbl_deep_extend("force", M.config, opts or {})
   local dap = load_module("dap")
-  setup_delve_adapter(dap, config)
-  setup_go_configuration(dap, config)
+  setup_delve_adapter(dap)
+  setup_go_configuration(dap)
 end
 
-local function debug_test(testname, testpath)
+local function debug_test(testname, testpath, build_flags)
   local dap = load_module("dap")
   dap.run({
     type = "go",
@@ -143,6 +149,7 @@ local function debug_test(testname, testpath)
     mode = "test",
     program = testpath,
     args = { "-test.run", testname },
+    buildFlags = build_flags,
   })
 end
 
@@ -261,7 +268,7 @@ function M.debug_test()
 
   local msg = string.format("starting debug session '%s : %s'...", testpath, testname)
   vim.notify(msg)
-  debug_test(testname, testpath)
+  debug_test(testname, testpath, M.config.delve.build_flags)
 
   return true
 end
@@ -277,7 +284,7 @@ function M.debug_last_test()
 
   local msg = string.format("starting debug session '%s : %s'...", testpath, testname)
   vim.notify(msg)
-  debug_test(testname, testpath)
+  debug_test(testname, testpath, M.config.delve.build_flags)
   return true
 end
 
