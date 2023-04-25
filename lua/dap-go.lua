@@ -7,7 +7,7 @@ local M = {
     delve = {
       initialize_timeout_sec = 20,
       port = "${port}",
-      build_flags = "unit_tests",
+      build_flags = "--tags=unit_tests",
     },
   }
 }
